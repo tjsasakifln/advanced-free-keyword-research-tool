@@ -14,9 +14,14 @@ Google · Bing · YouTube · Yahoo · DuckDuckGo · Yandex · Baidu · Naver · 
 
 </div>
 
+
+> **Bu fork (Brezilya sürümü):** varsayılan dil/ülke `pt-br` / `br`, varsayılan motor yalnızca Google. *Mine keywords*,
+> GitHub Pages ve haftalık uç nokta iş akışları herkese açık depoda veri sızdırmamak için kaldırıldı.
+> Ayrıntılar: [docs/BRASIL.md](docs/BRASIL.md) (Portekizce). Aşağıdaki metin orijinal projeyi anlatır.
+
 ## Özellikler
 
-- **25 arama motoru** (14'ü GitHub Pages üzerinde doğrudan tarayıcıda, 25'inin tamamı CLI / yerel sunucu / GitHub Action ile)
+- **25 arama motoru** (14'ü doğrudan tarayıcıda, 25'inin tamamı CLI / yerel sunucu ile; GitHub Action bu fork'ta kaldırıldı)
 - **Toplu giriş** — yüzlerce kelimeyi yapıştırın veya `.txt` / `.csv` yükleyin
 - **Uzun kuyruk genişletme** — alfabe sonek/önek (dile duyarlı: Türkçe `ç ğ ı ö ş ü` dahil), rakamlar, soru kalıpları (`nasıl, nedir, neden…`), niteleyiciler (`için, en iyi, fiyatları, yakınımda…`), kendi önek/sonekleriniz
 - **Özyinelemeli tarama** — derinlik kontrolü; yeni öneriler seçili *tüm* motorlarda tekrar sorgulanır
@@ -25,23 +30,23 @@ Google · Bing · YouTube · Yahoo · DuckDuckGo · Yandex · Baidu · Naver · 
 - **Dışa aktarma** — TXT, CSV (Excel için UTF-8 BOM, formül enjeksiyonuna karşı korumalı), TSV, JSON, Markdown, panoya kopyala
 - **Nazik tasarım** — motor başına bekleme, paralellik sınırı, en fazla istek sayısı, duraklat / devam / durdur, hata veren motoru otomatik kapatma
 - **Google sonuç sayfası (SERP) taraması** — isteğe bağlı olarak her kelime için Google sonuç sayfalarını 1…100 arası gezer; *ilgili aramaları*, *Diğer kullanıcılar şunları da sordu* sorularını ve (isteğe bağlı) organik başlıkları toplar; CAPTCHA'da kibarca durur — bkz. [Google sonuç sayfaları](#google-sonuç-sayfaları-serp)
-- **Arama dili ve ülkesi** (varsayılan 🇹🇷 `tr` / `tr`) destekleyen her motora iletilir — bkz. [Dil ve ülke](#dil-ve-ülke)
-- **Türkçe & İngilizce arayüz**, koyu tema, klavye erişilebilir, mobil uyumlu, ayarlar tarayıcıda saklanır
+- **Arama dili ve ülkesi** (bu fork'ta varsayılan 🇧🇷 `pt-br` / `br`; orijinal: `tr` / `tr`) destekleyen her motora iletilir — bkz. [Dil ve ülke](#dil-ve-ülke)
+- **Portekizce (bu fork'ta varsayılan), İngilizce & Türkçe arayüz**, koyu tema, klavye erişilebilir, mobil uyumlu, ayarlar tarayıcıda saklanır
 - **Çalışma zamanı bağımlılığı yok, derleme yok** — tarayıcı ve Node aynı ES modüllerini kullanır (isteğe bağlı SERP tarayıcı arka ucu `puppeteer-core` kullanır)
 
 ## Kullanım yolları
 
-### 1. Tarayıcıda (GitHub Pages)
+### 1. Tarayıcıda (orijinal projenin GitHub Pages sitesi; bu fork Pages yayınlamaz — yerel sunucuyu kullanın)
 
 **https://cumabozkurt.github.io/advanced-free-keyword-research-tool/** adresini açın, kelimeleri yazın, motorları seçin, **Başlat**'a basın.
-**Doğrudan** etiketli motorlar hemen çalışır. **Proxy** etiketliler (Amazon, Yandex, Brave, Ecosia, Qwant, Walmart, TikTok…) için 2. veya 5. seçeneğe bakın.
+**Doğrudan** etiketli motorlar hemen çalışır. **Proxy** etiketliler (Amazon, Yandex, Brave, Ecosia, Qwant, Walmart, TikTok…) için yerel sunucuyu kullanın (2. seçenek).
 
 Paylaşılabilir bağlantı: `…/?q=seo+araçları&engines=google,bing,youtube&hl=tr&gl=tr&run=1`
 
 ### 2. Yerel sunucu — tarayıcıda tüm motorlar
 
 ```bash
-git clone https://github.com/cumabozkurt/advanced-free-keyword-research-tool
+git clone https://github.com/tjsasakifln/advanced-free-keyword-research-tool   # bu fork (orijinal: cumabozkurt/…)
 cd advanced-free-keyword-research-tool
 npm start            # → http://localhost:8787  (Node 18+, kurulacak bir şey yok)
 # isteğe bağlı, Google sonuç sayfası taraması için:  npm install  (sonra yeniden başlatın)
@@ -52,39 +57,35 @@ Uygulama yerleşik proxy'yi otomatik algılar ve tüm motorları açar.
 ### 3. Komut satırı (CLI)
 
 ```bash
-node bin/cli.js "seo araçları"                                # varsayılan: Türkçe / Türkiye
+# Bu fork: varsayılan pt-br / br; gerçek çıktıları dados-locais/ içinde tutun (Git yok sayar)
+node bin/cli.js "seo araçları" -l tr -c tr -o dados-locais/sonuc.csv
 node bin/cli.js "seo tools" -l en -c us                       # İngilizce / ABD
-node bin/cli.js -f kelimeler.txt -e all -x alpha,questions -d 1 -o sonuc.csv -o sonuc.txt
-node bin/cli.js "kahve makinesi" -e google,yandex,amazon,youtube -o kahve.json   # amazon.com.tr
-cat kelimeler.txt | node bin/cli.js -e web -x none --format tsv > sonuc.tsv
+node bin/cli.js -f dados-locais/kelimeler.txt -e all -x alpha,questions -d 1 -l tr -c tr -o dados-locais/sonuc.csv
+cat dados-locais/kelimeler.txt | node bin/cli.js -e web -x none --format tsv > dados-locais/sonuc.tsv
 node bin/cli.js --list-engines
 node bin/cli.js --help
 ```
 
-### 4. Doğrudan GitHub üzerinde — bilgisayar gerekmez
+### 4. GitHub üzerinde — bu fork'ta kaldırıldı
 
-Repoyu fork'layın → **Actions** → **Mine keywords** → **Run workflow**, kelimeleri ve motorları girin → `keywords` artifact'ını indirin (TXT/CSV/TSV/JSON).
-İlk 100 sonuç çalışma özetinde görünür. Bu yöntemde tüm motorlar çalışır (sunucu tarafı olduğu için CORS sorunu yok).
+Orijinal projede bir *Mine keywords* iş akışı vardır ([orijinal README](https://github.com/cumabozkurt/advanced-free-keyword-research-tool/blob/main/README.tr.md)).
+Bu fork onu bilerek kaldırdı: herkese açık bir depoda girilen kelimeler, özet ve çıktılar herkes tarafından görülebilir.
+Bunun yerine CLI'yi kendi bilgisayarınızda çalıştırın (seçenek 3).
 
-### 5. Pages sitesi için kendi proxy'niz (isteğe bağlı)
+### 5. Pages sitesi için proxy — yalnızca orijinal proje
 
-```bash
-cd proxy && npx wrangler deploy      # Cloudflare Workers ücretsiz katman
-```
-
-Worker adresini uygulamada **Seçenekler → Proxy URL** alanına yapıştırın. `proxy/wrangler.toml` içinde `ALLOWED_ORIGINS` değerini Pages adresiniz yapın.
-
-Pages uygulamasını **yerel** sunucunuza da bağlayabilirsiniz (`http://localhost:8787`). Yerel sunucu varsayılan olarak yalnızca
-`https://cumabozkurt.github.io` kaynağından gelen çağrılara izin verir; fork için `npm start -- --allow-origin https://<siz>.github.io`.
+Orijinal proje, GitHub Pages uygulaması için `proxy/cloudflare-worker.js` yayınlamayı anlatır
+([orijinal README](https://github.com/cumabozkurt/advanced-free-keyword-research-tool/blob/main/README.tr.md)).
+Bu fork Pages sitesi veya herkese açık proxy yayınlamaz: yerel sunucuyu kullanın (seçenek 2).
 
 ## Dil ve ülke
 
 Öneriler pazara göre çok değişir; bu yüzden her aramanın arayüz dilinden bağımsız bir **arama dili** (`hl`) ve **ülke/bölgesi** (`gl`) vardır.
-Varsayılan: **Türkçe / Türkiye** (`tr` / `tr`).
+Bu fork'ta varsayılan: **Português (Brasil) / Brasil** (`pt-br` / `br`); orijinal projede `tr` / `tr`.
 
 - **Web uygulaması:** *Arama dili ve ülkesi* kartı — ~38 dil, ~60 ülke ve hızlı ön ayarlar (TR, US, UK, DE, FR, AZ, SA). Canlı bilgi satırı, seçili motorlardan hangilerinin dil/ülkeyi kullandığını ve nereye gittiğini gösterir (ör. `Amazon → amazon.com.tr`). `?hl=tr&gl=tr` ile paylaşılabilir.
 - **CLI:** `-l/--lang <hl>` ve `-c/--country <gl>` (ISO kodları doğrulanır). `--list-engines` her motorun dil/ülke desteğini gösterir.
-- **GitHub Action:** `lang` / `country` girdileri (varsayılan `tr` / `tr`).
+- **GitHub Action:** yalnızca orijinal projede (`lang` / `country`, varsayılan `tr` / `tr`); bu fork'ta kaldırıldı.
 - Genişletme alfabesi ve soru kalıpları arama diline göre seçilir (Türkçe `ç ğ ı ö ş ü`, Azerice `ə`, Lehçe, Ukraynaca, Rusça, Almanca, İspanyolca…).
 
 | Motor | `hl` / `gl` neyi belirler |
@@ -111,12 +112,12 @@ dışa aktarımlara ekler. Otomatik tamamlama motorları paralel olarak çalış
 
 **Nerede çalışır:** Yalnızca CLI ve yerel sunucu (bir kez `npm install`, sonra `npm start` veya CLI). Statik GitHub Pages sitesi Google
 sonuç sayfalarını okuyamaz (CORS + Google JavaScript ister); Pages uygulamasını yerel sunucunuza yönlendirirseniz o da kullanabilir.
-GitHub Action'da `serp_pages` girdisi var, ancak GitHub sunucu IP'leri neredeyse her zaman CAPTCHA ile engellenir.
+Orijinal projedeki GitHub Action'da `serp_pages` girdisi var (bu fork'ta kaldırıldı).
 
 ```bash
 npm install                                     # isteğe bağlı puppeteer-core (SİZİN kurulu Chrome/Chromium/Edge tarayıcınızı kullanır)
-node bin/cli.js "kahve makinesi" --serp                       # otomatik tamamlama + 10 Google sayfası, ilgili + PAA
-node bin/cli.js "kahve makinesi" --serp-only --serp-pages 30 --serp-sources related,paa,organic -o kahve.csv
+node bin/cli.js "kahve makinesi" --serp -o dados-locais/serp.json                       # otomatik tamamlama + 10 Google sayfası, ilgili + PAA
+node bin/cli.js "kahve makinesi" --serp-only --serp-pages 30 --serp-sources related,paa,organic -o dados-locais/serp.csv
 npm start                                       # web uygulaması: "Google arama sayfalarını tara" kutusunu işaretleyin (1–100 sayfa)
 ```
 
@@ -168,7 +169,7 @@ Aynı `web/js/engines.js` (motor kayıtları) ve `web/js/miner.js` (kuyruk, hız
 ## Geliştirme
 
 ```bash
-npm test        # 45 test: ayrıştırıcılar, dil/ülke, kuyruk, dışa aktarma, proxy, CLI, sunucu, SERP (gerçek CAPTCHA sayfası dahil HTML örnekleri, sahte Google uçtan uca)
+npm test        # çevrimdışı: ayrıştırıcılar, dil/ülke, kuyruk, dışa aktarma, proxy, CLI, sunucu, SERP (sentetik CAPTCHA, sahte Google uçtan uca)
 npm run check   # canlı uç nokta kontrolü
 npm start       # yerel sunucu
 ```

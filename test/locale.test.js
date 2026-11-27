@@ -5,8 +5,8 @@ import { expandSeed, alphabetKey } from '../web/js/expand.js';
 
 const url = (id, o, t = 'http') => new URL(ENGINE_MAP[id][t].url('kahve', o));
 
-test('default locale is Turkey', () => {
-  assert.deepEqual(DEFAULT_LOCALE, { hl: 'tr', gl: 'tr' });
+test('default locale is Brazil (this fork; upstream default was tr/tr)', () => {
+  assert.deepEqual(DEFAULT_LOCALE, { hl: 'pt-br', gl: 'br' });
 });
 
 test('locale reaches every locale-aware engine', () => {
