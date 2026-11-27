@@ -2,8 +2,9 @@
 /**
  * Advanced Free Keyword Research Tool — CLI
  *
- *   afkrt "seo tools"
- *   afkrt -f seeds.txt -e google,bing,amazon,youtube -x alpha,questions -d 1 -o out.csv
+ *   afkrt "converter pdf em word"                 (pt-br / br, Google, 4 famílias)
+ *   afkrt -f sementes.txt -x perguntas,comparacoes -o dados-locais/coleta.csv -o dados-locais/coleta.json
+ *   afkrt oportunidades --evidencias dados-locais/coleta.json --gsc dados-locais/consultas.csv --inventario dados-locais/inventario.csv -o dados-locais/oportunidades.csv
  *   afkrt --list-engines
  *   afkrt "kahve makinesi" --serp --serp-pages 10     (also walk Google result pages)
  */
@@ -16,74 +17,94 @@ import { serialize, FORMATS } from '../web/js/export.js';
 import { createHttpFetcher } from '../lib/http-fetcher.js';
 import { runSerpPhase, SERP_LIMITS } from '../web/js/serp-client.js';
 
+const DEFAULT_EXPAND = 'perguntas,modificadores,comparacoes,alfabetica';
+
 const HELP = `
-Advanced Free Keyword Research Tool (CLI)
+Advanced Free Keyword Research Tool (CLI) — versão Brasil
 
-Usage:
-  afkrt [options] [keyword ...]
+Uso:
+  afkrt [opções] [palavra ...]                    coleta sugestões (autocomplete)
+  afkrt oportunidades --evidencias <json> [...]   cruza evidências com Search Console e inventário (local, sem rede)
+  afkrt -- oportunidades                          pesquisa a palavra "oportunidades" como semente
 
-Input:
-  -f, --file <path>         Read seed keywords from a file (one per line, or comma separated)
-  (stdin)                   Seeds can also be piped:  cat seeds.txt | afkrt -o out.txt
+Entrada:
+  -f, --file <arquivo>      Lê sementes de um arquivo (uma por linha ou separadas por vírgula)
+  (stdin)                   Também aceita sementes por pipe:  cat sementes.txt | afkrt -o saida.csv
+  --                        Tudo depois de -- é semente (mesmo que pareça opção ou subcomando)
 
-Engines:
-  -e, --engines <list>      Comma separated engine ids, or "all" / "web" / "shopping" / "video"
-                            (default: ${DEFAULT_ENGINES.join(',')})
-      --list-engines        Show all engines and exit
+Provedores:
+  -e, --engines <lista>     Ids separados por vírgula, ou "all" / "web" / "shopping" / "video"
+                            (padrão: ${DEFAULT_ENGINES.join(',')}; os demais continuam disponíveis como opção)
+      --list-engines        Lista os provedores e sai
 
-Expansion (long-tail):
-  -x, --expand <list>       Strategies: alpha, alpha-prefix, digits, questions, modifiers, none
-                            (default: alpha)
-      --prefixes <list>     Custom prefixes  (comma separated)
-      --suffixes <list>     Custom suffixes  (comma separated)
-  -d, --depth <n>           Recursive depth: feed new suggestions back (default 0)
-      --expand-recursive    Also apply expansion strategies on recursive levels (huge!)
-      --must-contain        Keep only suggestions containing every seed word
+Expansão (cauda longa) — famílias:
+  -x, --expand <lista>      perguntas (questions), modificadores (modifiers), comparacoes (comparisons),
+                            alfabetica (alpha), alfabetica-prefixo (alpha-prefix), digitos (digits), none
+                            (padrão: ${DEFAULT_EXPAND})
+      --termos-perguntas <lista>      Termos extras da família perguntas (aceita {s}: "{s} funciona no mac")
+      --termos-modificadores <lista>  Termos extras de preposições/modificadores ("no celular", "sem cadastro")
+      --termos-comparacoes <lista>    Termos extras de comparações ("{s} ou outra opção")
+                            Sem {s}: perguntas vão antes da semente; modificadores e comparações, depois.
+                            Os termos extras também entram na classificação das frases retornadas.
+      --prefixes <lista>    Prefixos personalizados (família "personalizada")
+      --suffixes <lista>    Sufixos personalizados
+  -d, --depth <n>           Profundidade recursiva: realimenta sugestões novas (padrão 0)
+      --expand-recursive    Aplica a expansão também nos níveis recursivos (cresce muito!)
+      --must-contain        Mantém só sugestões que contêm todas as palavras da semente
 
-Locale (search language & country — sent to every engine that supports it):
-  -l, --lang <hl>           Search language, ISO 639-1: tr, en, de, fr, ar, ru… (default ${DEFAULT_LOCALE.hl})
-  -c, --country <gl>        Search country/region, ISO 3166-1 alpha-2: tr, us, gb, de… (default ${DEFAULT_LOCALE.gl})
-                            Also picks the Amazon marketplace, eBay site, Yahoo region, Yandex region,
-                            and the alphabet / question words used for expansion.
-                            See which engines use them:  afkrt --list-engines
+Idioma e país da busca (enviados a todo provedor que os suporta):
+  -l, --lang <hl>           Idioma da busca: pt-br, pt, en, es, tr… (padrão ${DEFAULT_LOCALE.hl})
+  -c, --country <gl>        País/região: br, pt, us, tr… (padrão ${DEFAULT_LOCALE.gl})
+                            Também escolhe as palavras das famílias e o alfabeto da expansão.
+                            Veja quem usa:  afkrt --list-engines
 
-Limits / politeness:
-      --delay <ms>          Delay between requests to the same engine (default 400)
-      --concurrency <n>     Engines queried in parallel (default 4)
-      --max-queries <n>     Max requests per engine (default 2000)
-      --max-results <n>     Stop after N unique keywords (default 50000)
-      --timeout <ms>        Request timeout (default 10000)
-      --user-agent <ua>     Override the User-Agent header
+Limites / cortesia:
+      --delay <ms>          Pausa entre requisições ao MESMO provedor (padrão 400)
+      --concurrency <n>     Provedores em paralelo (padrão 4)
+      --max-queries <n>     Máximo de requisições por provedor (padrão 2000)
+      --max-results <n>     Para após N frases únicas (padrão 50000)
+      --timeout <ms>        Tempo limite por requisição (padrão 10000)
+      --user-agent <ua>     Substitui o User-Agent
 
-Google result pages (SERP) — optional, needs \`npm install\` + local Chrome/Chromium/Edge:
-      --serp                Also walk Google result pages (start=0,10,20…) for every seed and collect
-                            related searches + "People also ask" (+ organic titles if requested)
-      --serp-pages <n>      Pages per seed, 1–100 (default ${SERP_LIMITS.defaultPages}). Google often has fewer.
-      --serp-sources <list> related, paa, organic  (default related,paa)
-      --serp-delay <ms>     Pause between two page loads, min ${SERP_LIMITS.minDelayMs} (default ${SERP_LIMITS.defaultDelayMs})
-      --serp-backend <b>    browser (default, your installed Chrome) | html (plain HTTP; usually JS-walled)
-      --serp-headful        Show the browser window
-      --serp-chrome <path>  Browser executable (or set CHROME_PATH)
-      --serp-profile <dir>  Browser profile directory to reuse (keeps Google's cookie-consent choice)
-      --serp-only           Only SERP pages, skip autocomplete engines
-                            Stops immediately on CAPTCHA / unusual-traffic pages (no solving, no evasion).
-                            Automated SERP access is against Google's ToS — see README.
+Páginas de resultado do Google (SERP) — opcional, fora do padrão; requer \`npm install\` + Chrome/Chromium local:
+      --serp                Também percorre páginas de resultado (start=0,10,20…) e coleta buscas relacionadas
+                            e "As pessoas também perguntam" (+ títulos orgânicos se pedido)
+      --serp-pages <n>      Páginas por semente, 1–100 (padrão ${SERP_LIMITS.defaultPages})
+      --serp-sources <lista> related, paa, organic  (padrão related,paa)
+      --serp-delay <ms>     Pausa entre páginas, mínimo ${SERP_LIMITS.minDelayMs} (padrão ${SERP_LIMITS.defaultDelayMs})
+      --serp-backend <b>    browser (padrão, seu Chrome) | html (HTTP simples; geralmente bloqueado)
+      --serp-headful        Mostra a janela do navegador
+      --serp-chrome <path>  Executável do navegador (ou CHROME_PATH)
+      --serp-profile <dir>  Perfil do navegador a reutilizar
+      --serp-only           Só SERP, sem autocomplete
+                            Para imediatamente em CAPTCHA (sem resolver, sem evasão). Acesso automatizado a
+                            páginas de resultado contraria os Termos do Google — veja o README.
 
-Output:
-  -o, --out <file>          Output file; format from extension (.txt .csv .tsv .json .md)
-                            Can be repeated:  -o out.txt -o out.csv
-      --format <fmt>        Format for stdout when no -o is given (default txt)
-  -q, --quiet               No progress output
-  -h, --help                Show help
+Saída:
+  -o, --out <arquivo>       Arquivo de saída; formato pela extensão (.txt .csv .tsv .json .md)
+                            Pode repetir:  -o dados-locais/coleta.csv -o dados-locais/coleta.json
+                            .csv = leitura (1 linha por frase, com todas as origens); .json = evidências completas
+      --format <fmt>        Formato no stdout quando não há -o (padrão txt)
+  -q, --quiet               Sem progresso
+  -h, --help                Ajuda
+
+Oportunidades (afkrt oportunidades --help para detalhes):
+  --evidencias <json>  --gsc <csv> (repetível)  --inventario <csv>  -o <saida.csv|saida.json>
+
+Guarde entradas e saídas reais em dados-locais/ (ignorada pelo Git). Ocorrências não são volume de busca.
 `;
 
 function parseArgs(argv) {
-  const a = { seeds: [], outs: [], engines: null, expand: 'alpha', depth: 0, lang: DEFAULT_LOCALE.hl, country: DEFAULT_LOCALE.gl, delay: 400, concurrency: 4, maxQueries: 2000, maxResults: 50000, timeout: 10000, format: 'txt' };
+  const a = { seeds: [], outs: [], engines: null, expand: DEFAULT_EXPAND, depth: 0, lang: DEFAULT_LOCALE.hl, country: DEFAULT_LOCALE.gl, delay: 400, concurrency: 4, maxQueries: 2000, maxResults: 50000, timeout: 10000, format: 'txt' };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const v = () => { const x = argv[++i]; if (x === undefined) throw new Error(`Missing value for ${k}`); return x; };
+    if (k === '--') { a.seeds.push(...argv.slice(i + 1)); break; }
     switch (k) {
       case '-h': case '--help': a.help = true; break;
+      case '--termos-perguntas': case '--question-terms': a.termsQuestions = v(); break;
+      case '--termos-modificadores': case '--modifier-terms': a.termsModifiers = v(); break;
+      case '--termos-comparacoes': case '--comparison-terms': a.termsComparisons = v(); break;
       case '-f': case '--file': a.file = v(); break;
       case '-e': case '--engines': a.engines = v(); break;
       case '--list-engines': a.list = true; break;
@@ -119,8 +140,9 @@ function parseArgs(argv) {
         a.seeds.push(k);
     }
   }
-  if (!isValidLang(a.lang)) throw new Error(`Invalid --lang "${a.lang}" (use a code like tr, en, de, pt-br)`);
-  if (!isValidCountry(a.country)) throw new Error(`Invalid --country "${a.country}" (use a 2-letter code like tr, us, gb)`);
+  if (!isValidLang(a.lang)) throw new Error(`Invalid --lang "${a.lang}" (use a code like pt-br, pt, en, tr)`);
+  resolveExpansion(a.expand, a); // validates -x early
+  if (!isValidCountry(a.country)) throw new Error(`Invalid --country "${a.country}" (use a 2-letter code like br, pt, us, tr)`);
   const ints = { depth: [0, 10], delay: [0, 60000], concurrency: [1, 32], maxQueries: [1, 1e6], maxResults: [1, 1e7], timeout: [1000, 120000] };
   for (const [k, [min, max]] of Object.entries(ints)) {
     if (!Number.isInteger(a[k]) || a[k] < min || a[k] > max) throw new Error(`--${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)} must be an integer between ${min} and ${max}`);
@@ -152,22 +174,44 @@ function resolveEngines(spec) {
   return [...out];
 }
 
+// -x accepts the Portuguese family names and the original English ones.
+const EXPAND_ALIASES = {
+  alpha: 'alpha', 'alpha-suffix': 'alpha', alfabetica: 'alpha', 'alfabetica-sufixo': 'alpha',
+  'alpha-prefix': 'alpha-prefix', 'alfabetica-prefixo': 'alpha-prefix',
+  digits: 'digits', digitos: 'digits',
+  questions: 'questions', perguntas: 'questions',
+  modifiers: 'modifiers', modificadores: 'modifiers', preposicoes: 'modifiers',
+  comparisons: 'comparisons', comparacoes: 'comparisons',
+  none: 'none', nenhuma: 'none',
+};
+
 function resolveExpansion(spec, a) {
-  const set = new Set(parseList(spec.toLowerCase()));
+  const set = new Set();
+  for (const raw of parseList(spec.toLowerCase())) {
+    const k = raw.normalize('NFD').replace(/\p{M}+/gu, '');
+    if (!Object.prototype.hasOwnProperty.call(EXPAND_ALIASES, k)) throw new Error(`Unknown --expand entry "${raw}" (use ${DEFAULT_EXPAND}, alfabetica-prefixo, digitos, none)`);
+    set.add(EXPAND_ALIASES[k]);
+  }
   const none = set.has('none');
+  // "-x none" means no expansion at all: extra family terms are ignored too.
+  const familyTerms = none ? { perguntas: [], modificadores: [], comparacoes: [] } : familyTermsOf(a);
   return {
     seed: true,
-    alphaSuffix: !none && (set.has('alpha') || set.has('alpha-suffix')),
+    alphaSuffix: !none && set.has('alpha'),
     alphaPrefix: !none && set.has('alpha-prefix'),
     digitSuffix: !none && set.has('digits'),
-    questions: !none && set.has('questions'),
-    modifiers: !none && set.has('modifiers'),
+    questions: !none && (set.has('questions') || familyTerms.perguntas.length > 0),
+    modifiers: !none && (set.has('modifiers') || familyTerms.modificadores.length > 0),
+    comparisons: !none && (set.has('comparisons') || familyTerms.comparacoes.length > 0),
     custom: Boolean(a.prefixes || a.suffixes),
     customPrefixes: parseList(a.prefixes),
     customSuffixes: parseList(a.suffixes),
+    familyTerms,
     lang: a.lang,
   };
 }
+
+const familyTermsOf = (a) => ({ perguntas: parseList(a.termsQuestions), modificadores: parseList(a.termsModifiers), comparacoes: parseList(a.termsComparisons) });
 
 async function readStdin() {
   if (process.stdin.isTTY) return '';
@@ -177,7 +221,13 @@ async function readStdin() {
 }
 
 async function main() {
-  const a = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv[0] === 'oportunidades' || argv[0] === 'opportunities') {
+    const { runOpportunities } = await import('../lib/opportunities-cli.js');
+    await runOpportunities(argv.slice(1));
+    return;
+  }
+  const a = parseArgs(argv);
   if (a.help) { console.log(HELP); return; }
   if (a.list) {
     console.log('id               category   browser  locale  notes');
@@ -190,7 +240,7 @@ async function main() {
   if (a.file) seedText += `\n${await readFile(a.file, 'utf8')}`;
   if (!a.seeds.length && !a.file) seedText += `\n${await readStdin()}`;
   const seeds = parseSeeds(seedText);
-  if (!seeds.length) { console.error('No seed keywords. Try: afkrt "seo tools"  (or --help)'); process.exitCode = 2; return; }
+  if (!seeds.length) { console.error('Nenhuma semente. Tente: afkrt "converter pdf em word"  (ou --help)'); process.exitCode = 2; return; }
 
   const engines = a.serpOnly ? [] : resolveEngines(a.engines);
   const log = (...m) => { if (!a.quiet) process.stderr.write(`${m.join(' ')}\n`); };
@@ -205,7 +255,8 @@ async function main() {
     const { createSerpBackend } = await import('../lib/google-serp.js');
     serpBackend = createSerpBackend({ backend: a.serpBackend, headful: a.serpHeadful, chromePath: a.serpChrome, userDataDir: a.serpProfile, baseUrl: a.serpBaseUrl });
     alongside.push((m) => runSerpPhase({
-      miner: m, seeds, fetchPage: serpBackend.fetchPage, pages: a.serpPages, sources: a.serpSourceList,
+      // Pages loaded right now by this process: a fresh answer, not a cache hit.
+      miner: m, seeds, fetchPage: async (...args) => ({ ...(await serpBackend.fetchPage(...args)), cached: false, fetchedAt: new Date().toISOString() }), pages: a.serpPages, sources: a.serpSourceList,
       delayMs: a.serpDelay, minDelayMs: a.serpBaseUrl ? 0 : SERP_LIMITS.minDelayMs,
       onStatus: (s) => {
         if (s.type === 'blocked') {
@@ -244,7 +295,8 @@ async function main() {
   log(`✔ ${results.length} unique keywords from ${miner.stats.done} requests (${miner.stats.errors} errors)`);
   for (const [id, s] of Object.entries(miner.stats.perEngine)) log(`   ${id.padEnd(16)} req ${String(s.requests).padStart(5)}  new ${String(s.found).padStart(5)}  err ${s.errors}${s.disabled ? '  (disabled)' : ''}`);
 
-  const meta = { seeds, engines, lang: a.lang, country: a.country, depth: a.depth, ...(a.serp ? { serp: { pages: a.serpPages, sources: a.serpSourceList } } : {}) };
+  const expansion = resolveExpansion(a.expand, a);
+  const meta = { seeds, engines, lang: a.lang, country: a.country, depth: a.depth, expansion: Object.keys(expansion).filter((k) => expansion[k] === true), familyTerms: expansion.familyTerms, ...(a.serp ? { serp: { pages: a.serpPages, sources: a.serpSourceList } } : {}) };
   if (!a.outs.length) {
     if (!FORMATS.includes(a.format)) throw new Error(`Unknown format ${a.format}`);
     process.stdout.write(serialize(a.format, results, meta));

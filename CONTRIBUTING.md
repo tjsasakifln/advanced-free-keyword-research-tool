@@ -8,7 +8,7 @@ No dependencies. Node 18+.
 
 ```bash
 npm test          # unit tests
-npm run check     # live endpoint health check
+npm run check     # live endpoint health check (local only; do not paste real collection output in issues/PRs)
 npm start         # http://localhost:8787 (app + proxy)
 ```
 
@@ -32,5 +32,8 @@ npm start         # http://localhost:8787 (app + proxy)
 
 - Public, key-less endpoints only. No captcha solving, fingerprint spoofing or bot-protection bypass.
 - Keep it dependency-free and build-free (`web/` must stay deployable as static files).
-- UI strings go in both `tr` and `en` in `web/js/i18n.js`.
+- UI strings go in `pt`, `en` and `tr` in `web/js/i18n.js`.
+- **Brazilian fork:** this repository is public. Never commit real data — strategic seed lists, Search Console exports,
+  internal URL inventories, collection reports or credentials. Keep them in `dados-locais/` (ignored by Git). Tests use
+  synthetic fixtures only (`test/fixtures/br`, domain `exemplo.test`) and never reach the network.
 - Conventional-ish commit messages (`feat:`, `fix:`, `docs:`, `test:`, `ci:`).

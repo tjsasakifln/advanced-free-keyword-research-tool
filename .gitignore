@@ -4,3 +4,47 @@ out/
 .DS_Store
 .wrangler/
 seeds.txt
+
+# ---------------------------------------------------------------------------------------------
+# Fork público: dados reais NUNCA entram no Git. Guarde-os em dados-locais/ (ou fora do checkout).
+# Consultas estratégicas, exportações do Search Console, inventários de URLs, relatórios e credenciais.
+# ---------------------------------------------------------------------------------------------
+/dados-locais/
+/relatorios/
+/reports/
+# Planilhas e exportações em qualquer pasta (as fixtures SINTÉTICAS de teste são a exceção abaixo).
+*.[cC][sS][vV]
+*.[tT][sS][vV]
+*.[xX][lL][sS][xX]
+*.[xX][lL][sS]
+*.[oO][dD][sS]
+*.[zZ][iI][pP]
+# Saídas de coleta e cruzamento em qualquer pasta.
+*evidencias*.json
+*oportunidades*.json
+*coleta*.json
+*keywords*.json
+# Downloads da interface web (TXT/JSON/MD recebem o prefixo "coleta-").
+coleta-*
+# Listas de sementes / consultas.
+sementes*.txt
+consultas*.txt
+# Perfis de navegador usados com --serp-profile (cookies, sessão e histórico do Google).
+chrome-profile*/
+*-profile/
+.serp-profile*/
+# Credenciais.
+.env
+.env.*
+*.pem
+*.key
+credentials*.json
+client_secret*.json
+service-account*.json
+token*.json
+
+# Exceção ESTREITA: só as planilhas sintéticas de teste (domínio exemplo.test). Credenciais nunca são re-incluídas.
+!test/fixtures/br/gsc-consultas-paginas-pt.csv
+!test/fixtures/br/gsc-so-consultas-en.csv
+!test/fixtures/br/gsc-so-paginas-pt.csv
+!test/fixtures/br/inventario-sintetico.csv

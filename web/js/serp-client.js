@@ -90,11 +90,13 @@ export async function runSerpPhase({ miner, seeds, fetchPage, pages = SERP_LIMIT
       st.ok += 1;
       summary.pages += 1;
       const task = { seed, q: seed, strategy: `serp-page-${page + 1}`, depth: 0 };
+      const receivedAt = new Date().toISOString(); // one receive time for every observation of this page
       for (const kind of sources) {
         const list = res[kind] || [];
         st.suggestions += list.length;
-        for (const kw of list) {
-          if (miner.addResult(kw, SERP_SOURCES[kind], task)) { st.found += 1; summary.found += 1; }
+        for (const [i, kw] of list.entries()) {
+          const extracted = res.extracted?.[kind]?.[i];
+          if (miner.addResult(kw, SERP_SOURCES[kind], task, { serpPage: page + 1, fromCache: typeof res.cached === 'boolean' ? res.cached : null, fetchedAt: res.fetchedAt, extracted, receivedAt })) { st.found += 1; summary.found += 1; }
         }
       }
       miner.emitProgress();

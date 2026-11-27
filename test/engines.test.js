@@ -24,8 +24,8 @@ test('parseJsonish handles JSONP, comments and multi-arg calls', () => {
 
 test('parsers extract suggestion strings from recorded responses', () => {
   const fx = {
-    google: ['seo', ['seo tools', 'seo <b>free</b>'], [], {}],
-    bing: ['seo', ['seo a', 'seo b']],
+    google: ['seo', ['seo tools', 'seo free'], [], {}],
+    bing: ['seo', ['seo a', 'seo <b>b</b>']],
     yahoo: { q: 'seo', r: [{ k: 'seo y1', m: 0 }, { k: 'seo y2', m: 0 }] },
     duckduckgo: [{ phrase: 'seo d1' }, { phrase: 'seo d2' }],
     baidu: { q: 'seo', g: [{ q: 'seo b1' }] },

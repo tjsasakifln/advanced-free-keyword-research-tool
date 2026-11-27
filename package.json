@@ -1,6 +1,6 @@
 {
   "name": "advanced-free-keyword-research-tool",
-  "version": "1.1.0",
+  "version": "1.2.0-br",
   "description": "Advanced Free Keyword Research Tool — bulk long-tail keyword ideas from 25+ search engine autocomplete endpoints (Google, Bing, YouTube, Amazon, DuckDuckGo, Yandex, Baidu…) plus optional Google result-page (SERP) mining of related searches and People-also-ask. Runs on GitHub Pages, CLI or local server. No API keys.",
   "type": "module",
   "license": "MIT",

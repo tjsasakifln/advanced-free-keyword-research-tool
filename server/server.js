@@ -119,7 +119,8 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   const shown = HOST === '0.0.0.0' ? 'localhost' : HOST;
   if (HOST !== '127.0.0.1' && HOST !== 'localhost' && HOST !== '::1') console.warn('  ⚠ Listening on a non-loopback address: anyone who can reach this port can use the proxy (rate-limited).');
-  console.log(`\n  Advanced Free Keyword Research Tool\n  ▸ App:   http://${shown}:${PORT}/\n  ▸ Proxy: http://${shown}:${PORT}/api/suggest?engine=amazon&q=laptop\n\n  The web app auto-detects this proxy, so all ${ENGINES.length} engines are available.`);
+  const port = server.address()?.port ?? PORT; // real port (also with --port 0)
+  console.log(`\n  Advanced Free Keyword Research Tool\n  ▸ App:   http://${shown}:${port}/\n  ▸ Proxy: http://${shown}:${port}/api/suggest?engine=amazon&q=laptop\n\n  The web app auto-detects this proxy, so all ${ENGINES.length} engines are available.`);
   console.log(serp ? `  ▸ Google SERP pages: enabled (${SERP_BACKEND} backend; stops on CAPTCHA)\n` : `  ▸ Google SERP pages: off — ${serpInfo.reason}\n`);
 });
 

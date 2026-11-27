@@ -1,9 +1,18 @@
+/**
+ * Whitespace for collapsing: like \s but WITHOUT U+FEFF (zero-width no-break space), which \s includes in JavaScript.
+ * "curso\uFEFFifc" must not become "curso ifc".
+ */
+export const WS = /[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/g;
+/** trim() without removing U+FEFF (String#trim removes it): evidence text keeps every non-whitespace character. */
+export const trimWS = (s) => String(s ?? '').replace(/^[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, '');
+
 /** Normalisation used for de-duplication across engines. */
 export function normalizeKeyword(s) {
   return String(s || '')
     .normalize('NFC')
-    .toLocaleLowerCase()
-    // "İ".toLocaleLowerCase() outside a Turkish locale gives "i" + U+0307; fold it so İstanbul == istanbul
+    // toLowerCase (not toLocaleLowerCase): the result must not depend on the OS locale (tr_TR would turn "ISO" into "ıso").
+    .toLowerCase()
+    // "İ".toLowerCase() gives "i" + U+0307; fold it so İstanbul == istanbul
     .replace(/i\u0307/g, 'i')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/\s+/g, ' ')

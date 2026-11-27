@@ -1,3 +1,7 @@
+# Validation of pushes and pull requests: lint + offline tests with synthetic data only.
+# No external collection (no real search engine, no Search Console), no reports published, no deploy.
+# Every network test talks to fake servers on 127.0.0.1 (see test/). Workflows that collected keywords
+# (Mine keywords), deployed GitHub Pages or checked live endpoints were removed in this fork.
 name: CI
 
 on:
@@ -19,10 +23,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: npm ci --no-audit --no-fund   # installs the optional puppeteer-core for the SERP browser-backend test
+      - run: npm ci --no-audit --no-fund   # installs the optional puppeteer-core for the SERP browser-backend test (fake Google on 127.0.0.1)
       - run: npm run lint
       - run: npm test
         env:
           AFKRT_CHROME_NO_SANDBOX: '1'
-      - name: CLI smoke test (offline-safe)
-        run: node bin/cli.js --list-engines
+      - name: CLI smoke test (offline)
+        run: |
+          node bin/cli.js --list-engines
+          node bin/cli.js oportunidades --help

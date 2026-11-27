@@ -35,8 +35,10 @@ test('serp parser: last page has no next link; "People also search for" chips', 
   assert.equal(r.hasNext, false); // only a link back to start=20
 });
 
-test('serp parser: CAPTCHA, JavaScript wall and consent pages are detected (real captured CAPTCHA)', () => {
-  assert.equal(parseGoogleSerp(fx('captcha-tr')).status, 'captcha');
+test('serp parser: CAPTCHA, JavaScript wall and consent pages are detected (synthetic CAPTCHA)', () => {
+  // Synthetic, self-contained page (this fork validates with synthetic data only).
+  assert.equal(parseGoogleSerp(fx('captcha-synthetic')).status, 'captcha');
+  assert.doesNotMatch(fx('captcha-synthetic'), /https?:\/\/|<script|<iframe|<img|<link/i);
   assert.equal(parseGoogleSerp(fx('jswall')).status, 'jswall');
   assert.equal(parseGoogleSerp(fx('consent')).status, 'consent');
   assert.equal(detectBlock('<html></html>', 'https://www.google.com/sorry/index?continue=x'), 'captcha');
@@ -158,7 +160,8 @@ function fakeGoogle({ captchaAt = -1 } = {}) {
     const p = start / 10;
     hits.push({ q: u.searchParams.get('q'), p, hl: u.searchParams.get('hl'), gl: u.searchParams.get('gl'), lr: u.searchParams.get('lr') });
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    if (p === captchaAt) { res.statusCode = 429; return res.end(fx('captcha-tr')); }
+    // Synthetic, self-contained CAPTCHA (the captured real page references Google scripts/frames a real browser would load).
+    if (p === captchaAt) { res.statusCode = 429; return res.end(fx('captcha-synthetic')); }
     const q = u.searchParams.get('q');
     const next = p < 2 ? `<a id="pnnext" href="/search?q=${encodeURIComponent(q)}&amp;start=${start + 10}">Sonraki</a>` : '';
     res.end(`<html><body><div id="search"><h3>${q} başlık ${p}</h3><div data-q="${q} nedir ${p}?"></div></div>
@@ -204,11 +207,13 @@ test('CLI --serp stops on CAPTCHA and reports it', async (t) => {
 
 test('server /api/serp: loopback-only, origin-checked, parsed fields only', async (t) => {
   const g = await fakeGoogle();
-  const port = 20000 + Math.floor(Math.random() * 2000);
-  const srv = spawn(process.execPath, ['server/server.js', '--port', String(port), '--serp-backend', 'html', '--serp-base-url', g.base, '--serp-gap', '0'], { cwd: root });
+  const srv = spawn(process.execPath, ['server/server.js', '--port', '0', '--serp-backend', 'html', '--serp-base-url', g.base, '--serp-gap', '0'], { cwd: root });
   t.after(() => { srv.kill(); g.srv.close(); });
+  let port;
+  let out = '';
   await new Promise((res, rej) => {
-    srv.stdout.on('data', (d) => { if (String(d).includes('SERP pages')) res(); });
+    // Ephemeral port chosen by the OS (no collisions between parallel test files).
+    srv.stdout.on('data', (d) => { out += d; const m = /App:\s+http:\/\/[^:/]+:(\d+)\//.exec(out); if (m) port = Number(m[1]); if (port && out.includes('SERP pages')) res(); });
     srv.on('exit', rej);
     setTimeout(() => rej(new Error('server did not start')), 5000);
   });

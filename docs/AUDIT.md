@@ -73,4 +73,4 @@ locale validation, alphabet selection, Turkish question detection and `İ` foldi
 - Server-side politeness independent of the client: serialised page loads, ≥4 s gap (`--serp-gap`), 6 h cache, 15-minute cool-down after a CAPTCHA (no Google request at all during it).
 - Client/CLI: pages clamped to 1–100, delay ≥2 s, stop on CAPTCHA / consent / JS wall / 3 errors; SERP failures never stop autocomplete (`Miner.alongside`).
 - Verified: real Google from the build server → CAPTCHA on page 1, reported in UI and CLI, autocomplete results still exported. Fake-Google E2E (CLI, server, web UI, real Chrome backend) pass.
-- CAPTCHA fixture is a real captured page with the IP address and tokens redacted.
+- CAPTCHA fixture is a real captured page with the IP address and tokens redacted. *(Brazilian fork: replaced by a synthetic, self-contained page — tests use synthetic data only.)*

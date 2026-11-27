@@ -13,6 +13,9 @@
  * run `npm run check` to re-test them. See docs/ENDPOINTS.md.
  */
 
+/** Default search locale of this fork: Portuguese (Brazil) / Brazil. Upstream default was tr / tr. */
+export const DEFAULT_LOCALE = { hl: 'pt-br', gl: 'br' };
+
 const enc = encodeURIComponent;
 const hasOwn = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 
@@ -20,29 +23,50 @@ const hasOwn = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
 export const isValidLang = (hl) => typeof hl === 'string' && /^[a-z]{2,3}(-[a-z0-9]{2,4})?$/i.test(hl);
 export const isValidCountry = (gl) => typeof gl === 'string' && /^[a-z]{2}$/i.test(gl);
 
-/** Strip HTML tags/entities that some engines embed (<b>…</b>). */
-export function cleanText(s) {
+/** Text as extracted from an engine field: HTML tags removed and entities decoded, whitespace untouched (no raw HTML kept). */
+export function extractText(s) {
   if (s == null) return '';
   return String(s)
-    .replace(/<[^>]*>/g, '')
+    // Only PAIRED inline markup that engines embed ("seo <b>free</b>"): an unpaired "<b>" or "a < e > b" is literal text.
+    .replace(/<(b|strong|em|i|u|mark|span|font|sup|sub)\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/\1\s*>/gi, '$2')
+    .replace(/<(b|strong|em|i|u|mark|span|font|sup|sub)\b(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)<\/\1\s*>/gi, '$2')
     .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
 
-const asStrings = (arr) => (Array.isArray(arr) ? arr : [])
-  .map((x) => (Array.isArray(x) ? x[0] : (x && typeof x === 'object' ? (x.value ?? x.phrase ?? x.text ?? '') : x)))
-  .map(cleanText)
-  .filter(Boolean);
+/** Collapse whitespace only (U+FEFF is not whitespace); the text itself is kept literally. */
+const collapseWS = (s) => String(s).replace(/[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/g, ' ').replace(/^ | $/g, '');
+
+/** Strip HTML tags/entities that some engines embed (<b>…</b>) and collapse whitespace. */
+export function cleanText(s) {
+  return collapseWS(extractText(s));
+}
+
+/**
+ * Suggestion strings of an engine response. The returned array also carries `extracted`: for each suggestion, the
+ * text before whitespace was collapsed (evidence of what the engine sent, without HTML).
+ */
+const asStrings = (arr, { html = true } = {}) => {
+  const pairs = (Array.isArray(arr) ? arr : [])
+    .map((x) => (Array.isArray(x) ? x[0] : (x && typeof x === 'object' ? (x.value ?? x.phrase ?? x.text ?? '') : x)))
+    .map((x) => (x == null ? '' : String(x)))
+    // Plain-text fields (html: false) are kept literally: "a &lt; b" or "tag <b> x" is what the engine returned.
+    .map((x) => (html ? [cleanText(x), extractText(x)] : [collapseWS(x), x]))
+    .filter(([c]) => Boolean(c));
+  // Non-enumerable: the result still equals a plain string array for callers that compare or serialise it.
+  return Object.defineProperty(pairs.map(([c]) => c), 'extracted', { value: pairs.map(([, e]) => e), enumerable: false });
+};
 
 /** OpenSearch format: ["query", ["s1","s2",...], ...] */
 const openSearch = (d) => asStrings(Array.isArray(d) ? d[1] : []);
+/** Same format from an endpoint that returns plain text (Google suggest, client=chrome): no HTML interpretation. */
+const openSearchPlain = (d) => asStrings(Array.isArray(d) ? d[1] : [], { html: false });
 
-const lang = (o) => (o.hl || 'en').toLowerCase();
+// Fallbacks follow DEFAULT_LOCALE (pt-br / br) — callers normally always pass hl and gl.
+const lang = (o) => (o.hl || DEFAULT_LOCALE.hl).toLowerCase();
 /** Base language without region: pt-br -> pt, zh-cn -> zh */
 const baseLang = (o) => lang(o).split('-')[0];
-const country = (o) => (o.gl || 'us').toLowerCase();
+const country = (o) => (o.gl || DEFAULT_LOCALE.gl).toLowerCase();
 
 // ---------- Google family (suggestqueries.google.com, JSONP via `callback`) ----------
 function googleEngine(id, name, ds, category, extra = {}) {
@@ -51,8 +75,8 @@ function googleEngine(id, name, ds, category, extra = {}) {
     (ds ? `&ds=${ds}` : '') + `&q=${enc(q)}`;
   return {
     id, name, category, backend: 'Google', locale: 'hl+gl', ...extra,
-    jsonp: { url: base, param: 'callback', parse: openSearch },
-    http: { url: base, parse: openSearch },
+    jsonp: { url: base, param: 'callback', parse: openSearchPlain },
+    http: { url: base, parse: openSearchPlain },
   };
 }
 
@@ -288,7 +312,7 @@ export const isEngineId = (id) => typeof id === 'string' && hasOwn(ENGINE_MAP, i
 /** Which locale parameters an engine honours: 'hl+gl' | 'hl' | 'gl' | 'fixed'. */
 export const localeSupport = (e) => e.locale || 'fixed';
 
-export const DEFAULT_LOCALE = { hl: 'tr', gl: 'tr' };
+
 
 /** Human readable description of what an engine will use for a given locale (shown in the UI). */
 export function localeTarget(e, o) {
@@ -303,7 +327,8 @@ export function localeTarget(e, o) {
 export const browserNative = (e) => Boolean(e.jsonp || e.cors);
 
 /** Default selection for first-time users (fast, broad, browser-native). */
-export const DEFAULT_ENGINES = ['google', 'bing', 'yahoo', 'duckduckgo', 'youtube', 'google-shopping', 'ebay', 'wikipedia'];
+// Brazil fork: start with Google only. Every other engine stays available as an explicit opt-in.
+export const DEFAULT_ENGINES = ['google'];
 
 export const CATEGORIES = ['web', 'video', 'shopping', 'vertical', 'knowledge'];
 

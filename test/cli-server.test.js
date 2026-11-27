@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const cli = (...args) => spawnSync(process.execPath, ['bin/cli.js', ...args], { cwd: root, encoding: 'utf8' });
 
-test('cli --help documents language and country with Turkish defaults', () => {
+test('cli --help documents language and country with Brazilian defaults (still selectable)', () => {
   const r = cli('--help');
   assert.equal(r.status, 0);
-  assert.match(r.stdout, /--lang <hl>.*default tr/);
-  assert.match(r.stdout, /--country <gl>.*default tr/);
+  assert.match(r.stdout, /--lang <hl>.*padrão pt-br/);
+  assert.match(r.stdout, /--country <gl>.*padrão br/);
 });
 
 test('cli --list-engines shows locale column', () => {
@@ -28,11 +28,11 @@ test('cli rejects invalid locale, numbers and engines', () => {
 });
 
 test('server: static files, traversal, proxy validation, CORS allow-list', async (t) => {
-  const port = 18000 + Math.floor(Math.random() * 2000);
-  const srv = spawn(process.execPath, ['server/server.js', '--port', String(port)], { cwd: root });
+  const srv = spawn(process.execPath, ['server/server.js', '--port', '0'], { cwd: root });
   t.after(() => srv.kill());
-  await new Promise((res, rej) => {
-    srv.stdout.on('data', (d) => { if (String(d).includes('App:')) res(); });
+  let out = '';
+  const port = await new Promise((res, rej) => {
+    srv.stdout.on('data', (d) => { out += d; const m = /App:\s+http:\/\/[^:/]+:(\d+)\//.exec(out); if (m) res(Number(m[1])); });
     srv.on('exit', rej);
     setTimeout(() => rej(new Error('server did not start')), 5000);
   });

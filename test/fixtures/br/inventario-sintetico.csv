@@ -1,0 +1,8 @@
+url,titulo,termos,intencoes,autorizada
+https://exemplo.test/ferramentas/editor-dwg,Editor de DWG (sintético),editar dwg|editor dwg|dwg,ferramenta|conteudo,sim
+https://exemplo.test/ferramentas/pdf-para-dwg,PDF para DWG (sintético),pdf em dwg|pdf para dwg,ferramenta,sim
+https://exemplo.test/ferramentas/visualizador-ifc,Visualizador IFC (sintético),ifc|abrir ifc,ferramenta|conteudo,sim
+https://exemplo.test/blog/ifc-explicado,O que é IFC (sintético),ifc,conteudo,sim
+https://exemplo.test/servicos/ppci,PPCI (sintético),prevenção contra incêndio|ppci,servico|conteudo,sim
+https://exemplo.test/rascunho,Rascunho (sintético),dwg,ferramenta,não
+https://exemplo.test/blog/pdf-dwg-guia,Guia PDF/DWG (sintético),online,conteudo,talvez

@@ -3,39 +3,40 @@ import { runSerpPhase, SerpBlockedError, SERP_LIMITS } from './serp-client.js';
 import { Miner } from './miner.js';
 import { expandSeed, parseSeeds, parseList, ALPHABETS, alphabetKey } from './expand.js';
 import { serialize, fileName, MIME } from './export.js';
-import { isQuestion, wordCount, normalizeKeyword } from './normalize.js';
+import { wordCount, normalizeKeyword } from './normalize.js';
+import { classifyObservations, familyOfStrategy } from './classify.js';
 import { createBrowserFetcher, browserMode } from './transport-browser.js';
-import { t as tr, STRINGS } from './i18n.js';
+import { t as tr, STRINGS, UI_LANGS, HTML_LANG } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
-const STORE_KEY = 'afkrt:settings:v1';
+const STORE_KEY = 'afkrt-br:settings:v1'; // own key: settings saved by the upstream (tr/tr) app are not reused
 const COPY_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
 
 const LANGS = [
-  ['tr', 'Türkçe'], ['en', 'English'], ['de', 'Deutsch'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano'],
-  ['pt', 'Português'], ['pt-br', 'Português (Brasil)'], ['nl', 'Nederlands'], ['pl', 'Polski'], ['ru', 'Русский'], ['uk', 'Українська'],
+  ['pt-br', 'Português (Brasil)'], ['pt', 'Português'], ['en', 'English'], ['es', 'Español'], ['tr', 'Türkçe'], ['de', 'Deutsch'], ['fr', 'Français'],
+  ['it', 'Italiano'], ['nl', 'Nederlands'], ['pl', 'Polski'], ['ru', 'Русский'], ['uk', 'Українська'],
   ['az', 'Azərbaycan'], ['ar', 'العربية'], ['fa', 'فارسی'], ['he', 'עברית'], ['hi', 'हिन्दी'], ['ur', 'اردو'], ['bn', 'বাংলা'],
   ['id', 'Bahasa Indonesia'], ['ms', 'Bahasa Melayu'], ['vi', 'Tiếng Việt'], ['th', 'ไทย'], ['ja', '日本語'], ['ko', '한국어'],
   ['zh-cn', '中文 (简体)'], ['zh-tw', '中文 (繁體)'], ['el', 'Ελληνικά'], ['ro', 'Română'], ['bg', 'Български'], ['hu', 'Magyar'],
   ['cs', 'Čeština'], ['sv', 'Svenska'], ['da', 'Dansk'], ['no', 'Norsk'], ['fi', 'Suomi'], ['ka', 'ქართული'], ['kk', 'Қазақ'],
 ];
 const COUNTRIES = [
-  ['tr', 'Türkiye'], ['us', 'United States'], ['gb', 'United Kingdom'], ['de', 'Deutschland'], ['fr', 'France'], ['es', 'España'],
+  ['br', 'Brasil'], ['pt', 'Portugal'], ['tr', 'Türkiye'], ['us', 'United States'], ['gb', 'United Kingdom'], ['de', 'Deutschland'], ['fr', 'France'], ['es', 'España'],
   ['it', 'Italia'], ['nl', 'Nederland'], ['be', 'België'], ['at', 'Österreich'], ['ch', 'Schweiz'], ['pl', 'Polska'], ['se', 'Sverige'],
-  ['no', 'Norge'], ['dk', 'Danmark'], ['fi', 'Suomi'], ['ie', 'Ireland'], ['pt', 'Portugal'], ['gr', 'Ελλάδα'], ['ro', 'România'],
+  ['no', 'Norge'], ['dk', 'Danmark'], ['fi', 'Suomi'], ['ie', 'Ireland'], ['gr', 'Ελλάδα'], ['ro', 'România'],
   ['bg', 'България'], ['hu', 'Magyarország'], ['cz', 'Česko'], ['ua', 'Україна'], ['ru', 'Россия'], ['az', 'Azərbaycan'],
   ['ge', 'საქართველო'], ['kz', 'Қазақстан'], ['uz', "O'zbekiston"], ['cy', 'Kıbrıs'], ['ca', 'Canada'], ['mx', 'México'],
-  ['br', 'Brasil'], ['ar', 'Argentina'], ['co', 'Colombia'], ['cl', 'Chile'], ['au', 'Australia'], ['nz', 'New Zealand'],
+  ['ar', 'Argentina'], ['co', 'Colombia'], ['cl', 'Chile'], ['au', 'Australia'], ['nz', 'New Zealand'],
   ['in', 'India'], ['pk', 'Pakistan'], ['bd', 'Bangladesh'], ['id', 'Indonesia'], ['my', 'Malaysia'], ['sg', 'Singapore'],
   ['ph', 'Philippines'], ['vn', 'Việt Nam'], ['th', 'ไทย'], ['jp', '日本'], ['kr', '대한민국'], ['cn', '中国'], ['tw', '台灣'],
   ['hk', '香港'], ['sa', 'السعودية'], ['ae', 'الإمارات'], ['eg', 'مصر'], ['ma', 'المغرب'], ['il', 'ישראל'], ['ir', 'ایران'],
   ['za', 'South Africa'], ['ng', 'Nigeria'],
 ];
-const LOCALE_PRESETS = [['TR', 'tr', 'tr'], ['US', 'en', 'us'], ['UK', 'en', 'gb'], ['DE', 'de', 'de'], ['FR', 'fr', 'fr'], ['AZ', 'az', 'az'], ['SA', 'ar', 'sa']];
-const EXPANSIONS = ['seed', 'alphaSuffix', 'alphaPrefix', 'digitSuffix', 'questions', 'modifiers', 'custom'];
+const LOCALE_PRESETS = [['BR', 'pt-br', 'br'], ['PT', 'pt', 'pt'], ['TR', 'tr', 'tr'], ['US', 'en', 'us'], ['UK', 'en', 'gb'], ['DE', 'de', 'de'], ['FR', 'fr', 'fr'], ['AZ', 'az', 'az'], ['SA', 'ar', 'sa']];
+const EXPANSIONS = ['seed', 'questions', 'modifiers', 'comparisons', 'alphaSuffix', 'alphaPrefix', 'digitSuffix', 'custom'];
 
 const state = {
-  lang: 'tr',
+  lang: 'pt',
   miner: null,
   records: [],          // all records (live references from miner)
   recordIndex: new Map(),
@@ -45,13 +46,16 @@ const state = {
   notices: [],
   serpInfo: null,       // { available, backend, reason } from the local server's /api/health
   serpBase: '',
+  runs: [],             // settings of every batch merged into the current results
+  termsByRun: {},       // runId -> family terms used by that batch
 };
 
 // ---------------- settings ----------------
 const defaults = () => ({
-  ui: (navigator.language || 'tr').toLowerCase().startsWith('tr') ? 'tr' : 'en',
+  ui: 'pt',
   seeds: '', hl: DEFAULT_LOCALE.hl, gl: DEFAULT_LOCALE.gl, engines: DEFAULT_ENGINES,
-  expansion: { seed: true, alphaSuffix: true }, customPrefixes: '', customSuffixes: '',
+  expansion: { seed: true, questions: true, modifiers: true, comparisons: true, alphaSuffix: true }, customPrefixes: '', customSuffixes: '',
+  termsQuestions: '', termsModifiers: '', termsComparisons: '',
   depth: 0, maxQueries: 300, delay: 350, concurrency: 4, expandRecursive: false, mustContain: false, proxyUrl: '',
   serp: { enabled: false, pages: SERP_LIMITS.defaultPages, delaySec: SERP_LIMITS.defaultDelayMs / 1000, related: true, paa: true, organic: false },
 });
@@ -65,11 +69,14 @@ function saveSettings() {
 // ---------------- i18n ----------------
 const t = (key, vars) => tr(state.lang, key, vars);
 function applyI18n() {
-  document.documentElement.lang = state.lang;
+  document.documentElement.lang = HTML_LANG[state.lang] || state.lang;
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.placeholder = t(el.dataset.i18nPlaceholder);
+  for (const el of document.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
   $('langToggle').textContent = t('lang');
   $('langToggle').title = t('langTitle');
+  $('langToggle').setAttribute('aria-label', t('langTitle'));
+  $('table').querySelector('[data-i18n="colHits"]').title = t('hitsNote');
   renderEngines(readEnginesSelection());
   renderExpansions(readExpansionSelection());
   renderLocalePresets();
@@ -185,6 +192,7 @@ function readForm() {
     engines: readEnginesSelection(),
     expansion: readExpansionSelection(),
     customPrefixes: $('customPrefixes').value, customSuffixes: $('customSuffixes').value,
+    termsQuestions: $('termsQuestions').value, termsModifiers: $('termsModifiers').value, termsComparisons: $('termsComparisons').value,
     depth: num('depth', 0, 5, 0), maxQueries: num('maxQueries', 1, 20000, 300),
     delay: num('delay', 100, 10000, 350), concurrency: num('concurrency', 1, 12, 4),
     expandRecursive: $('expandRecursive').checked, mustContain: $('mustContain').checked,
@@ -198,9 +206,19 @@ function readForm() {
   };
 }
 
+const familyTermsOf = (f) => ({ perguntas: parseList(f.termsQuestions), modificadores: parseList(f.termsModifiers), comparacoes: parseList(f.termsComparisons) });
+
 function expansionOptions(f) {
-  return { ...f.expansion, customPrefixes: parseList(f.customPrefixes), customSuffixes: parseList(f.customSuffixes), lang: f.hl };
+  const familyTerms = familyTermsOf(f);
+  // Extra terms only apply to the families whose box is ticked (the checkbox is the control).
+  return {
+    ...f.expansion,
+    customPrefixes: parseList(f.customPrefixes), customSuffixes: parseList(f.customSuffixes), familyTerms, lang: f.hl,
+  };
 }
+
+// Classified per (search language, batch) with that batch's own family terms — never the UI language or the form's terms.
+const recordQuestion = (r) => classifyObservations(r.keyword, r.observations, state.termsByRun, {}).includes('perguntas');
 
 function updateSeedCount() {
   const seeds = parseSeeds($('seeds').value);
@@ -249,7 +267,7 @@ async function start(ev) {
   saveSettings();
 
   const serpSources = ['related', 'paa', 'organic'].filter((k) => f.serp[k]);
-  state.lastMeta = { seeds, engines: usable, lang: f.hl, country: f.gl, depth: f.depth, ...(serpOn ? { serp: { pages: f.serp.pages, sources: serpSources } } : {}) };
+  const runInfo = { seeds, engines: usable, lang: f.hl, country: f.gl, depth: f.depth, ...(serpOn ? { serp: { pages: f.serp.pages, sources: serpSources } } : {}) };
   const alongside = serpOn ? [(m) => runSerpPhase({
     miner: m, seeds, pages: f.serp.pages, sources: serpSources, delayMs: f.serp.delaySec * 1000,
     fetchPage: serpFetchPage(state.serpBase),
@@ -263,6 +281,14 @@ async function start(ev) {
     mustContainSeed: f.mustContain, delayMs: f.delay, concurrency: f.concurrency, maxQueries: f.maxQueries,
   });
   state.miner = miner;
+  const expansionUsed = expansionOptions(f);
+  // Terms recorded per batch: only families that were ticked in this batch.
+  state.termsByRun[miner.runId] = {
+    perguntas: expansionUsed.questions ? expansionUsed.familyTerms.perguntas : [],
+    modificadores: expansionUsed.modifiers ? expansionUsed.familyTerms.modificadores : [],
+    comparacoes: expansionUsed.comparisons ? expansionUsed.familyTerms.comparacoes : [],
+  };
+  state.runs.push({ runId: miner.runId, ...runInfo, familyTerms: state.termsByRun[miner.runId] });
   miner.on('result', ({ record, isNew }) => {
     if (isNew) { state.records.push(record); state.recordIndex.set(record.norm, record); }
     scheduleRender();
@@ -316,7 +342,7 @@ function filtered() {
   const minW = Number($('minWords').value) || 1;
   let list = state.records.filter((r) => (!q || r.norm.includes(q))
     && (!ex.length || !ex.some((w) => r.norm.includes(w)))
-    && (!onlyQ || isQuestion(r.keyword))
+    && (!onlyQ || recordQuestion(r))
     && (minW <= 1 || wordCount(r.keyword) >= minW));
   const sort = $('sort').value;
   const cmp = {
@@ -348,7 +374,7 @@ function render() {
     const wrap = document.createElement('div'); wrap.className = 'kw';
     const text = document.createElement('span'); text.className = 'kw-text'; text.textContent = r.keyword;
     wrap.append(text);
-    if (isQuestion(r.keyword)) { const qt = document.createElement('span'); qt.className = 'q-tag'; qt.textContent = '?'; qt.title = t('onlyQuestions'); wrap.append(qt); }
+    if (recordQuestion(r)) { const qt = document.createElement('span'); qt.className = 'q-tag'; qt.textContent = '?'; qt.title = t('onlyQuestions'); wrap.append(qt); }
     const acts = document.createElement('span'); acts.className = 'kw-actions';
     const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'icon-btn'; copy.innerHTML = COPY_ICON; copy.title = t('copyKeyword'); copy.setAttribute('aria-label', `${t('copyKeyword')}: ${r.keyword}`);
     copy.dataset.copy = r.keyword;
@@ -361,7 +387,9 @@ function render() {
     eng.append(chips);
     const hits = document.createElement('td'); hits.className = 'num-col'; hits.textContent = String(r.hits);
     const words = document.createElement('td'); words.className = 'num-col hide-sm'; words.textContent = String(wordCount(r.keyword));
-    const seed = document.createElement('td'); seed.className = 'seed-cell hide-sm'; seed.textContent = r.seed; seed.title = `${r.query} (${r.strategy}, depth ${r.depth})`;
+    const seed = document.createElement('td'); seed.className = 'seed-cell hide-sm'; seed.textContent = r.seed;
+    const origins = [...new Set((r.observations || []).flatMap((o) => (o.origins || []).map((x) => `${x.family}: ${String(o.query).trim()}`)))];
+    seed.title = origins.length ? `${t('originsTitle')}:\n${origins.slice(0, 12).join('\n')}${origins.length > 12 ? '\n…' : ''}` : `${r.query} (${familyOfStrategy(r.strategy)}, depth ${r.depth})`;
     tr.append(n, kw, eng, hits, words, seed);
     frag.append(tr);
   });
@@ -374,19 +402,41 @@ function render() {
 
 function exportRecords() {
   const list = $('exportFiltered').checked ? filtered() : [...state.records];
-  return list.map((r) => ({ ...r, engines: [...r.engines] }));
+  return list.map((r) => ({ ...r, engines: [...r.engines], observations: [...(r.observations || [])] }));
+}
+
+/**
+ * Export metadata built from the EXPORTED records only (a filtered export never lists other batches' seeds or terms),
+ * and never from the last batch alone (each observation carries its own locale).
+ */
+function exportMeta(recs) {
+  const used = new Set(recs.flatMap((r) => (r.observations || []).map((o) => o.runId)));
+  const runs = state.runs.filter((r) => used.has(r.runId));
+  const uniq = (a) => [...new Set(a)];
+  const langs = uniq(runs.map((r) => r.lang));
+  const countries = uniq(runs.map((r) => r.country));
+  const seeds = uniq(recs.flatMap((r) => (r.observations || []).flatMap((o) => (o.origins || []).map((x) => x.seed))));
+  return {
+    seeds, engines: uniq(recs.flatMap((r) => r.engines || [])),
+    ...(langs.length === 1 ? { lang: langs[0] } : { langs }), ...(countries.length === 1 ? { country: countries[0] } : { countries }),
+    // Seeds per batch: only those that produced an EXPORTED observation in THAT batch.
+    batches: runs.map((r) => {
+      const own = new Set(recs.flatMap((x) => (x.observations || []).filter((o) => o.runId === r.runId).flatMap((o) => (o.origins || []).map((y) => y.seed))));
+      return { ...r, seeds: r.seeds.filter((s) => own.has(s)) };
+    }),
+    familyTermsByRun: Object.fromEntries([...used].map((id) => [id, state.termsByRun[id] || {}])),
+  };
 }
 
 function download(format) {
   const recs = exportRecords();
   if (!recs.length) { toast(t('empty')); return; }
-  const f = readForm();
-  const seeds = parseSeeds(f.seeds);
-  const meta = state.lastMeta || { seeds, engines: f.engines, lang: f.hl, country: f.gl };
+  const meta = exportMeta(recs);
   const blob = new Blob([serialize(format, recs, meta)], { type: MIME[format] });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = fileName(seeds, format);
+  // Named after a seed that really produced the exported records — never a seed only typed in the form.
+  a.download = fileName(meta.seeds, format);
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
@@ -456,11 +506,12 @@ async function testProxy(url, silent = false) {
 // ---------------- init ----------------
 function init() {
   const s = loadSettings();
-  state.lang = STRINGS[s.ui] ? s.ui : 'tr';
+  state.lang = STRINGS[s.ui] ? s.ui : 'pt';
   fillSelect($('hl'), LANGS, isValidLang(s.hl) ? s.hl : DEFAULT_LOCALE.hl);
   fillSelect($('gl'), COUNTRIES, isValidCountry(s.gl) ? s.gl : DEFAULT_LOCALE.gl);
   $('seeds').value = s.seeds;
   $('customPrefixes').value = s.customPrefixes; $('customSuffixes').value = s.customSuffixes;
+  $('termsQuestions').value = s.termsQuestions || ''; $('termsModifiers').value = s.termsModifiers || ''; $('termsComparisons').value = s.termsComparisons || '';
   $('depth').value = s.depth; $('maxQueries').value = s.maxQueries; $('delay').value = s.delay; $('concurrency').value = s.concurrency;
   $('expandRecursive').checked = s.expandRecursive; $('mustContain').checked = s.mustContain;
   $('proxyUrl').value = s.proxyUrl;
@@ -488,12 +539,12 @@ function init() {
   $('stopBtn').addEventListener('click', () => state.miner?.stop());
   $('clearBtn').addEventListener('click', () => {
     if (state.miner?.state === 'running') return;
-    state.records = []; state.recordIndex.clear(); state.limit = 500; clearNotices();
+    state.records = []; state.recordIndex.clear(); state.limit = 500; state.runs = []; state.termsByRun = {}; clearNotices();
     for (const id of ['statUnique', 'statRequests', 'statRemaining', 'statErrors']) $(id).textContent = '0';
     $('progressBar').style.width = '0'; $('engineStats').replaceChildren();
     render();
   });
-  $('langToggle').addEventListener('click', () => { state.lang = state.lang === 'tr' ? 'en' : 'tr'; applyI18n(); saveSettings(); });
+  $('langToggle').addEventListener('click', () => { state.lang = UI_LANGS[(UI_LANGS.indexOf(state.lang) + 1) % UI_LANGS.length]; applyI18n(); saveSettings(); });
   $('form').addEventListener('change', (e) => {
     if (e.target.dataset?.exp === 'custom') $('customBox').hidden = !e.target.checked;
     if (e.target.id === 'proxyUrl') { renderEngines(readEnginesSelection()); const u = $('proxyUrl').value.trim(); if (u) testProxy(u, true); }
@@ -514,6 +565,7 @@ function init() {
     const ids = mode === 'all' ? ENGINES.filter((e) => browserMode(e, proxy) && !e.experimental).map((e) => e.id) : mode === 'default' ? DEFAULT_ENGINES : [];
     renderEngines(ids); updateLocaleInfo(); updateSeedCount(); saveSettings();
   }));
+  for (const id of ['termsQuestions', 'termsModifiers', 'termsComparisons']) $(id).addEventListener('input', () => { updateSeedCount(); clearTimeout(init.tt); init.tt = setTimeout(saveSettings, 400); });
   for (const id of ['filter', 'exclude', 'minWords', 'onlyQuestions', 'sort']) $(id).addEventListener('input', () => { state.limit = 500; scheduleRender(); });
   $('showMore').addEventListener('click', () => { state.limit += 1000; render(); });
   document.querySelectorAll('[data-export]').forEach((b) => b.addEventListener('click', () => download(b.dataset.export)));

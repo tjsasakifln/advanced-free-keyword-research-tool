@@ -87,7 +87,15 @@ export function createBrowserFetcher({ proxyUrl = '', preferProxy = false } = {}
       const u = `${proxy}/api/suggest?engine=${encodeURIComponent(engineId)}&q=${encodeURIComponent(query)}&hl=${encodeURIComponent(opts.hl || '')}&gl=${encodeURIComponent(opts.gl || '')}`;
       const data = await fetchJson(u, opts);
       if (data.error) throw new Error(data.error);
-      return data.suggestions || [];
+      // The proxy says whether the answer came from its cache (evidence: not a fresh observation).
+      const list = [...(data.suggestions || [])];
+      const props = {
+        cached: typeof data.cached === 'boolean' ? data.cached : null, // older proxies without the field: unknown
+        ...(typeof data.fetchedAt === 'string' ? { fetchedAt: data.fetchedAt } : {}),
+        ...(Array.isArray(data.extracted) && data.extracted.length === list.length ? { extracted: data.extracted } : {}),
+      };
+      for (const [k, v] of Object.entries(props)) Object.defineProperty(list, k, { value: v, enumerable: false });
+      return list;
     }
     throw new Error('needs proxy');
   };
